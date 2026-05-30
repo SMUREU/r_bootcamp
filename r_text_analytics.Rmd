@@ -1,0 +1,597 @@
+---
+title: "Working with Text and Text Analytics in R"
+author: "SMUREU Data Science Bootcamp"
+output: html_notebook
+---
+
+# Working with Text and Text Analytics in R
+
+So far in this bootcamp we have worked with:
+
+-   numbers
+-   tables
+-   maps
+-   geographic data
+
+But a huge amount of real-world data is actually text.
+
+Reviews, news articles, social media posts, interview transcripts, emails, books, and surveys are all forms of text data.
+
+Today we will explore:
+
+-   cleaning text
+-   counting words and phrases
+-   extracting patterns from language
+-   identifying important words in documents
+-   some limitations of text analysis
+
+```{r setup}
+library(tidyverse)
+library(tidytext)
+```
+
+# Apartment Reviews: Text as Data
+
+Let's start with a small dataset of apartment reviews.
+
+Unlike numerical data, text is:
+
+-   messy
+-   inconsistent
+-   emotional
+-   ambiguous
+
+But we can still analyze it computationally.
+
+```{r}
+reviews <- tibble(
+  Apartment = c(
+    "Mustang Station",
+    "Campus View",
+    "Highland House",
+    "Mockingbird Flats",
+    "Hilltop Lofts",
+    "University Crossing",
+    "Maple Terrace",
+    "Lakeside Apartments"
+  ),
+  Stars = c(2, 4, 1, 5, 3, 2, 4, 1),
+  Review = c(
+    "The location is honestly great if you need to get to campus quickly, but the walls are paper thin and people are constantly yelling outside at like 2am.",
+    "Pretty solid place overall. Cheap rent, decent kitchen, and I can walk to class in about 10 minutes. Maintenance is slow sometimes though.",
+    "I would absolutely not live here again. My AC broke twice during August and management stopped answering emails after the first week.",
+    "Loved living here. The staff remembered my name, the study rooms were actually useful, and the coffee shop downstairs became my second home.",
+    "The apartment itself is nice enough and I like the gym, but parking is frustrating and guest parking is basically impossible on weekends.",
+    "Moved in because it looked nice on the tour but the wifi cuts out constantly and my roommate found mold behind the kitchen cabinet midway through the semester.",
+    "Honestly surprised by how much I liked this place. Quiet, clean, good lighting, and my dog was weirdly happier here than our last apartment.",
+    "One night the fire alarm went off three times between midnight and 4am and nobody from management explained what happened. Also saw two cockroaches in the kitchen."
+  )
+)
+
+reviews
+```
+
+# Word Counts
+
+One of the simplest things we can measure is document length.
+
+```{r}
+reviews <- reviews |>
+  mutate(
+    word_count = str_count(Review, "\\S+"),
+    char_count = str_length(Review)
+  )
+
+reviews |>
+  select(Apartment, word_count, char_count)
+```
+
+```{r}
+reviews |>
+  arrange(desc(word_count))
+```
+
+# Most Common Words
+
+Now let's split the reviews into individual words.
+
+This process is often called tokenization.
+
+```{r}
+review_words <- reviews |>
+  unnest_tokens(word, Review)
+
+review_words |>
+  count(word, sort = TRUE) |>
+  head(15)
+```
+
+Some of these words are useful.
+
+Some are extremely common and do not tell us very much.
+
+# Stopwords
+
+Stopwords are very common words like:
+
+-   the
+-   and
+-   is
+-   of
+
+These words are often removed because they carry little meaning by themselves.
+
+```{r}
+data("stop_words")
+
+clean_review_words <- review_words |>
+  anti_join(stop_words, by = "word")
+
+clean_review_words |>
+  count(word, sort = TRUE) |>
+  head(15)
+```
+
+# Visualizing Word Counts
+
+```{r}
+clean_review_words |>
+  count(word, sort = TRUE) |>
+  slice_head(n = 10) |>
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Most Common Words in Apartment Reviews",
+    x = "Word",
+    y = "Count"
+  )
+```
+
+# You Try
+
+Pick one apartment review and answer:
+
+1.  Does the cleaned version preserve the meaning of the original review?
+2.  What information was removed?
+3.  What information became easier to analyze?
+
+# Limits of Word Counts
+
+Consider these two sentences:
+
+-   "dog bites man"
+-   "man bites dog"
+
+A simple word count treats these as almost identical.
+
+But they clearly mean very different things.
+
+Word order matters.
+
+# Folktales Dataset
+
+Now let's move to a larger and more complicated text dataset.
+
+```{r}
+folktales <- read_csv("data/folktales.csv", show_col_types = FALSE)
+
+folktales |> head()
+```
+
+```{r}
+folktales |> names()
+```
+
+```{r}
+folktales |>
+  count(`Country of Origin`, sort = TRUE) |>
+  head(10)
+```
+
+```{r}
+folktales |>
+  select(Title, Author, `Country of Origin`, `Story Type`) |>
+  head()
+```
+
+# Select a Familiar Story
+
+We'll focus on Cinderella because:
+
+-   it is culturally recognizable
+-   it contains repeated motifs
+-   it is long enough for analysis
+-   it has strong thematic vocabulary
+
+```{r}
+cinderella <- folktales |>
+  filter(str_detect(Title, regex("Cinderella", ignore_case = TRUE)))
+
+cinderella |>
+  select(Title, `Country of Origin`, Author, `Story Type`)
+```
+
+The dataset contains multiple versions of Cinderella.
+
+We'll use the French version because it is closer to the version many readers recognize today and contains familiar story elements.
+
+```{r}
+story <- cinderella$Story[2]
+
+str_sub(story, 1, 1000)
+```
+
+# Word Frequencies
+
+`unnest_tokens()` lowercases and removes punctuation by default.
+
+```{r}
+story_words <- tibble(text = story) |>
+  unnest_tokens(word, text) |>
+  anti_join(stop_words, by = "word")
+
+story_words |>
+  count(word, sort = TRUE) |>
+  head(20)
+```
+
+```{r}
+story_words |>
+  count(word, sort = TRUE) |>
+  slice_head(n = 15) |>
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Most Common Words in Cinderella",
+    x = "Word",
+    y = "Count"
+  )
+```
+
+# N-grams
+
+Single words can be useful, but phrases can reveal more structure.
+
+An n-gram is a sequence of words.
+
+Today we will focus on bigrams, or 2-word phrases.
+
+```{r}
+story_bigrams <- tibble(text = story) |>
+  unnest_tokens(bigram, text, token = "ngrams", n = 2)
+
+story_bigrams |>
+  count(bigram, sort = TRUE) |>
+  head(15)
+```
+
+# Why N-grams Matter
+
+N-grams preserve some word order information.
+
+For example:
+
+-   "glass slipper"
+-   "evil stepmother"
+-   "royal ball"
+
+can reveal themes that single words might miss.
+
+# TF-IDF
+
+Word frequency tells us what words are common.
+
+But what words make a story unique?
+
+TF-IDF helps identify words that are:
+
+-   common in one document
+-   uncommon across the whole collection
+
+In plain language:
+
+-   TF asks: What words appear often in this story?
+-   IDF asks: What words are rare across all stories?
+-   TF-IDF asks: What words help make this story distinctive?
+
+This idea is closely related to how search engines and recommendation systems identify important terms in documents.
+
+# TF-IDF with tidytext
+
+```{r}
+folktale_words <- folktales |>
+  mutate(doc_id = row_number()) |>
+  select(doc_id, Title, Story) |>
+  unnest_tokens(word, Story) |>
+  anti_join(stop_words, by = "word") |>
+  count(doc_id, Title, word, sort = TRUE)
+```
+
+```{r}
+folktale_tfidf <- folktale_words |>
+  bind_tf_idf(word, doc_id, n)
+
+folktale_tfidf |>
+  arrange(desc(tf_idf)) |>
+  head()
+```
+
+# Most Important Words in Cinderella
+
+```{r}
+cinderella_doc_id <- cinderella |> 
+  mutate(original_row = as.integer(rownames(cinderella))) |> 
+  slice(2) |> 
+  pull(original_row)
+
+# Since folktales were read in as a tibble, use the original row number from folktales
+cinderella_doc_id <- which(folktales$Title == cinderella$Title[2] & folktales$Story == cinderella$Story[2])[1]
+```
+
+```{r}
+cinderella_tfidf <- folktale_tfidf |>
+  filter(doc_id == cinderella_doc_id) |>
+  arrange(desc(tf_idf)) |>
+  slice_head(n = 20)
+
+cinderella_tfidf
+```
+
+```{r}
+cinderella_tfidf |>
+  slice_head(n = 15) |>
+  ggplot(aes(x = reorder(word, tf_idf), y = tf_idf)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Most Distinctive Words in Cinderella by TF-IDF",
+    x = "Word",
+    y = "TF-IDF"
+  )
+```
+
+# Comparing Cinderella and Little Red Riding Hood
+
+TF-IDF becomes especially useful when we compare documents.
+
+Let's compare two familiar stories:
+
+-   Cinderella
+-   Little Red Riding Hood
+
+We expect different stories to have different distinctive words.
+
+```{r}
+little_red <- folktales |>
+  filter(str_detect(Title, regex("Little Red", ignore_case = TRUE)))
+
+little_red |>
+  select(Title, `Country of Origin`, Author, `Story Type`)
+```
+
+We'll compare against the French version of Little Red Riding Hood for the same reason.
+
+```{r}
+little_red_doc_id <- which(folktales$Title == little_red$Title[2] & folktales$Story == little_red$Story[2])[1]
+```
+
+```{r}
+little_red_tfidf <- folktale_tfidf |>
+  filter(doc_id == little_red_doc_id) |>
+  arrange(desc(tf_idf)) |>
+  slice_head(n = 20)
+
+little_red_tfidf
+```
+
+```{r}
+little_red_tfidf |>
+  slice_head(n = 15) |>
+  ggplot(aes(x = reorder(word, tf_idf), y = tf_idf)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Most Distinctive Words in Little Red Riding Hood by TF-IDF",
+    x = "Word",
+    y = "TF-IDF"
+  )
+```
+
+## Discussion
+
+What do you notice?
+
+-   Do the distinctive words match what you know about each story?
+-   Which words reflect characters?
+-   Which words reflect objects?
+-   Which words reflect setting?
+-   Which words are surprising?
+
+This is where TF-IDF becomes powerful: it helps us identify words that characterize one document relative to a collection.
+
+# You Try
+
+Choose a different folktale and repeat the TF-IDF analysis.
+
+```{r}
+folktales |>
+  select(Title, `Country of Origin`) |>
+  slice_sample(n = 10)
+```
+
+```{r}
+title_fragment <- "Wolf"
+
+selected_story <- folktales |>
+  filter(str_detect(Title, regex(title_fragment, ignore_case = TRUE)))
+
+selected_story |>
+  select(Title, `Country of Origin`, Author) |>
+  head()
+```
+
+```{r}
+if (nrow(selected_story) > 0) {
+  selected_doc_id <- which(folktales$Title == selected_story$Title[1] & folktales$Story == selected_story$Story[1])[1]
+
+  folktale_tfidf |>
+    filter(doc_id == selected_doc_id) |>
+    arrange(desc(tf_idf)) |>
+    slice_head(n = 20)
+} else {
+  message("No stories matched that title fragment.")
+}
+```
+
+# Simple Sentiment Analysis
+
+Sentiment analysis attempts to estimate whether text is:
+
+-   positive
+-   negative
+-   neutral
+
+Sentiment analysis is useful, but it is also imperfect. It can struggle with sarcasm, context, older language, and cultural nuance.
+
+In R, one simple beginner-friendly approach is to use a sentiment lexicon.
+
+```{r}
+bing_sentiments <- get_sentiments("bing")
+
+review_sentiment <- reviews |>
+  mutate(review_id = row_number()) |>
+  unnest_tokens(word, Review) |>
+  inner_join(bing_sentiments, by = "word") |>
+  count(Apartment, Stars, sentiment) |>
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) |>
+  mutate(sentiment_score = positive - negative)
+
+review_sentiment
+```
+
+```{r}
+ggplot(review_sentiment, aes(x = reorder(Apartment, sentiment_score), y = sentiment_score)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Estimated Review Sentiment",
+    x = "Apartment",
+    y = "Positive Words - Negative Words"
+  )
+```
+
+Do the sentiment scores match the star ratings?
+
+Why or why not?
+
+# Sentiment in Folktales
+
+```{r}
+folktale_sentiment <- folktales |>
+  mutate(doc_id = row_number()) |>
+  select(doc_id, Title, `Country of Origin`, Story) |>
+  unnest_tokens(word, Story) |>
+  inner_join(bing_sentiments, by = "word") |>
+  count(doc_id, Title, `Country of Origin`, sentiment) |>
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) |>
+  mutate(sentiment_score = positive - negative)
+```
+
+```{r}
+folktale_sentiment |>
+  arrange(desc(sentiment_score)) |>
+  select(Title, `Country of Origin`, sentiment_score) |>
+  head(10)
+```
+
+```{r}
+folktale_sentiment |>
+  arrange(sentiment_score) |>
+  select(Title, `Country of Origin`, sentiment_score) |>
+  head(10)
+```
+
+Do these rankings seem believable?
+
+What might sentiment analysis miss in older translated folktales?
+
+# Where Might You Use This?
+
+Text analytics appears in many fields:
+
+-   News articles
+-   Interview transcripts
+-   Social media posts
+-   Product reviews
+-   Research papers
+-   Legislative documents
+-   Historical archives
+
+The same workflow we used today can often be adapted to these domains.
+
+# Limitations of Text Analysis
+
+Text analysis is powerful, but imperfect.
+
+Some challenges include:
+
+-   sarcasm
+-   ambiguity
+-   context
+-   cultural meaning
+-   humor
+-   changing language
+-   translation
+-   historical language
+-   missing metadata
+
+Simple methods often lose important meaning.
+
+# AI and Modern Language Models
+
+Many modern AI systems use ideas related to text analysis.
+
+Older approaches:
+
+-   counted words
+-   measured frequencies
+-   used simple statistics
+
+Modern AI systems:
+
+-   model context
+-   learn relationships between words
+-   represent language mathematically
+-   generate new text
+
+Large Language Models are built on these kinds of ideas, but at much larger scales.
+
+# Mini Challenge
+
+Choose one folktale or the apartment review set and investigate it.
+
+Try to:
+
+-   clean the text
+-   count important words
+-   generate bigrams
+-   calculate TF-IDF
+-   visualize something interesting
+
+Then answer:
+
+1.  What pattern did you notice?
+2.  What surprised you?
+3.  What important meaning might your analysis miss?
+
+# AI Assistant Checkpoint
+
+Try asking an AI assistant:
+
+-   "Explain TF-IDF in plain English."
+-   "Why do we remove stopwords in text analysis?"
+-   "What meaning is lost when we use word counts?"
+-   "How could I improve this text analysis?"
+-   "Why might sentiment analysis fail on folktales?"

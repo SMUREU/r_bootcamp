@@ -1,0 +1,504 @@
+---
+title: "Introduction to R Programming and R Markdown"
+author: "SMUREU Data Science Bootcamp"
+output: html_notebook
+---
+
+# Introduction to R Programming
+
+This notebook is the R companion to the Python introduction.
+
+The goal is not to memorize every command.
+
+The goal is to become comfortable reading, running, modifying, and experimenting with code.
+
+By the end of this notebook you should be able to:
+
+-   run R code in an R Markdown notebook
+-   create variables
+-   work with vectors and lists
+-   use data frames and tibbles
+-   filter, sort, summarize, and join data
+-   make a simple plot
+
+```{r setup}
+library(tidyverse)
+```
+
+# Operating This Notebook
+
+R Markdown notebooks combine:
+
+-   text
+-   code
+-   output
+-   plots
+-   notes
+
+Code appears in chunks like this:
+
+```{r}
+1 + 1
+```
+
+You can run a chunk using the run button or the keyboard shortcut in your editor.
+
+If something breaks:
+
+1.  Save your work
+2.  Restart the R session
+3.  Run the chunks again from the top
+
+# Basic Math
+
+R can do calculations like a calculator.
+
+```{r}
+1 + 1
+```
+
+```{r}
+2.5 - 2.0
+```
+
+```{r}
+10 * 5
+```
+
+```{r}
+100 / 4
+```
+
+# Variables
+
+Variables allow us to save values for later.
+
+```{r}
+dallas_population <- 1300000
+smu_students <- 12000
+```
+
+```{r}
+dallas_population + smu_students
+```
+
+R commonly uses `<-` for assignment.
+
+You will also see `=` used, but `<-` is the traditional R style.
+
+# Strings
+
+Strings allow us to store text.
+
+```{r}
+our_string <- "Here is a string in R!"
+our_string
+```
+
+```{r}
+print(our_string)
+```
+
+# Vectors
+
+A vector is a collection of values of the same general type.
+
+```{r}
+favorite_foods <- c("tacos", "ramen", "pizza")
+favorite_foods
+```
+
+R indexing starts at 1.
+
+```{r}
+favorite_foods[1]
+```
+
+```{r}
+favorite_foods[length(favorite_foods)]
+```
+
+## You Try
+
+Create a vector containing:
+
+-   your hometown
+-   your favorite movie
+-   your favorite food
+
+Then print the first and last item.
+
+```{r}
+# Create your vector here
+
+# Print the first item
+
+# Print the last item
+```
+
+# Named Vectors
+
+Named vectors let us attach labels to values.
+
+```{r}
+city_populations <- c(
+  Dallas = 1345000,
+  Taos = 5668,
+  Houston = 2326000
+)
+
+city_populations
+```
+
+```{r}
+city_populations["Taos"]
+```
+
+# Libraries
+
+R libraries are collections of pre-written tools.
+
+Instead of writing everything from scratch, we can load libraries that help us:
+
+-   analyze data
+-   make plots
+-   work with maps
+-   clean text
+
+One of the most important collections of libraries for data science in R is the `tidyverse`.
+
+```{r}
+library(tidyverse)
+```
+
+# Data Frames and Tibbles
+
+A data frame is a table.
+
+It has rows and columns, like a spreadsheet.
+
+A tibble is a modern tidyverse-friendly version of a data frame.
+
+```{r}
+books <- tibble(
+  Books = c(
+    "The Silmarillion",
+    "The Hobbit",
+    "The Fellowship of the Ring",
+    "The Two Towers",
+    "The Return of the King"
+  ),
+  Words = c(130115, 95506, 187726, 156147, 137037)
+)
+
+books
+```
+
+# Selecting Columns
+
+```{r}
+books$Books
+```
+
+```{r}
+books |> select(Books)
+```
+
+# Selecting Rows
+
+```{r}
+books |> slice(1:2)
+```
+
+```{r}
+books |> slice(3:4)
+```
+
+# Selecting Rows and Columns
+
+```{r}
+books |> 
+  slice(3:4) |> 
+  select(Words)
+```
+
+# Operating on Columns
+
+```{r}
+total_words <- sum(books$Words)
+total_words
+```
+
+## You Try
+
+1.  Select only the `Words` column
+2.  Select the first 3 rows
+3.  Find the total number of words across all books
+
+```{r}
+# Your code here
+```
+
+# Loops and Functions
+
+Computers are good at doing repeated tasks.
+
+Here is a simple loop.
+
+```{r}
+for (book in books$Books) {
+  print(book)
+}
+```
+
+Functions let us save a reusable set of instructions.
+
+```{r}
+square_me <- function(n) {
+  n * n
+}
+```
+
+```{r}
+square_me(4)
+```
+
+# More Complex Data
+
+Below we have chapter-level word counts from The Hobbit and The Lord of the Rings.
+
+```{r}
+chapters <- tribble(
+  ~CollectionNum, ~ChapterNum, ~ChapterName, ~WordCount, ~BookNum,
+  0, 1, "An Unexpected Party", 8638, 0,
+  0, 2, "Roast Mutton", 5257, 0,
+  0, 3, "A Short Rest", 2876, 0,
+  0, 4, "Over Hill and Under Hill", 4034, 0,
+  0, 5, "Riddles in the Dark", 6967, 0,
+  0, 6, "Out of the Frying Pan into the Fire", 6703, 0,
+  0, 7, "Queer Lodgings", 9027, 0,
+  0, 8, "Flies and Spiders", 10223, 0,
+  0, 9, "Barrels Out of Bond", 5833, 0,
+  0, 10, "A Warm Welcome", 3930, 0,
+  0, 11, "On the Doorstep", 3001, 0,
+  0, 12, "Inside Information", 7132, 0,
+  0, 13, "Not At Home", 3909, 0,
+  0, 14, "Fire and Water", 3236, 0,
+  0, 15, "The Gathering of the Clouds", 3362, 0,
+  0, 16, "A Thief in the Night", 2153, 0,
+  0, 17, "The Clouds Burst", 3949, 0,
+  0, 18, "The Return Journey", 2815, 0,
+  0, 19, "The Last Stage", 2461, 0,
+  1, -4, "Concerning Hobbits", 3406, 1,
+  1, -3, "Concerning Pipeweed", 600, 1,
+  1, -2, "Of the Ordering of the Shire", 2431, 1,
+  1, -1, "Note on the Shire Records", 914, 1,
+  1, 1, "A Long-expected Party", 10012, 1,
+  1, 2, "The Shadow of the Past", 11311, 1,
+  1, 3, "Three is Company", 9763, 1,
+  1, 4, "A Short Cut to Mushrooms", 5957, 1,
+  1, 5, "A Conspiracy Unmasked", 5196, 1,
+  1, 6, "The Old Forest", 6502, 1,
+  1, 7, "In the House of Tom Bombadil", 5501, 1,
+  1, 8, "Fog on the Barrow-downs", 6694, 1,
+  1, 9, "At the Sign of the Prancing Pony", 6251, 1,
+  1, 10, "Strider", 5905, 1,
+  1, 11, "A Knife in the Dark", 9468, 1,
+  1, 12, "Flight to the Ford", 8805, 1,
+  1, 1, "Many Meetings", 9085, 2,
+  1, 2, "The Council of Elrond", 16360, 2,
+  1, 3, "The Ring goes South", 10656, 2,
+  1, 4, "A Journey in the Dark", 11501, 2,
+  1, 5, "The Bridge of Khazad-dum", 5428, 2,
+  1, 6, "Lothlorien", 9387, 2,
+  1, 7, "The Mirror of Galadriel", 6896, 2,
+  1, 8, "Farewell to Lorien", 6174, 2,
+  1, 9, "The Great River", 7218, 2,
+  1, 10, "The Breaking of the Fellowship", 6305, 2,
+  2, 1, "The Departure of Boromir", 3397, 3,
+  2, 2, "The Riders of Rohan", 11133, 3,
+  2, 3, "The Uruk-hai", 7854, 3,
+  2, 4, "Treebeard", 12876, 3,
+  2, 5, "The White Rider", 8856, 3,
+  2, 6, "The King of the Golden Hall", 9303, 3,
+  2, 7, "Helm's Deep", 7575, 3,
+  2, 8, "The Road to Isengard", 7899, 3,
+  2, 9, "Flotsam and Jetsam", 7789, 3,
+  2, 10, "The Voice of Saruman", 5663, 3,
+  2, 11, "The Palantir", 6325, 3,
+  2, 1, "The Taming of Smeagol", 8375, 4,
+  2, 2, "The Passage of the Marshes", 7357, 4,
+  2, 3, "The Black Gate is Closed", 5881, 4,
+  2, 4, "Of Herbs and Stewed Rabbit", 6975, 4,
+  2, 5, "The Window on the West", 10120, 4,
+  2, 6, "The Forbidden Pool", 5179, 4,
+  2, 7, "Journey to the Crossroads", 4266, 4,
+  2, 8, "The Stairs of Cirith Ungol", 6793, 4,
+  2, 9, "Shelob's Lair", 5209, 4,
+  2, 10, "The Choices of Master Samwise", 7322, 4,
+  3, 1, "Minas Tirith", 13100, 5,
+  3, 2, "The Passing of the Grey Company", 8586, 5,
+  3, 3, "The Muster of Rohan", 6951, 5,
+  3, 4, "The Siege of Gondor", 11793, 5,
+  3, 5, "The Ride of the Rohirrim", 4358, 5,
+  3, 6, "The Battle of the Pelennor Fields", 5225, 5,
+  3, 7, "The Pyre of Denethor", 3736, 5,
+  3, 8, "The Houses of Healing", 6731, 5,
+  3, 9, "The Last Debate", 5416, 5,
+  3, 10, "The Black Gate Opens", 5204, 5,
+  3, 1, "The Tower of Cirith Ungol", 9721, 6,
+  3, 2, "The Land of Shadow", 8446, 6,
+  3, 3, "Mount Doom", 7777, 6,
+  3, 4, "The Field of Cormallen", 4721, 6,
+  3, 5, "The Steward and the King", 7639, 6,
+  3, 6, "Many Partings", 7440, 6,
+  3, 7, "Homeward Bound", 4106, 6,
+  3, 8, "The Scouring of the Shire", 11296, 6,
+  3, 9, "The Grey Havens", 4791, 6
+)
+
+chapters
+```
+
+# Mapping Values
+
+We can use a small lookup table to translate collection numbers into names.
+
+```{r}
+title_map <- tibble(
+  CollectionNum = c(0, 1, 2, 3),
+  CollectionName = c(
+    "The Hobbit",
+    "The Fellowship of the Ring",
+    "The Two Towers",
+    "The Return of the King"
+  )
+)
+
+chapters <- chapters |>
+  left_join(title_map, by = "CollectionNum")
+
+chapters
+```
+
+# Grouping and Summarizing
+
+`group_by()` lets us create groups.
+
+`summarise()` lets us calculate values for each group.
+
+```{r}
+chapters |>
+  group_by(CollectionName) |>
+  summarise(
+    chapter_count = n(),
+    total_words = sum(WordCount),
+    average_chapter_length = mean(WordCount)
+  )
+```
+
+## You Try
+
+Use `group_by()` and `summarise()` to find the average chapter length for each collection.
+
+```{r}
+# Your code here
+```
+
+# Filtering
+
+Filtering lets us select rows based on conditions.
+
+```{r}
+books |> 
+  filter(Books == "The Hobbit")
+```
+
+```{r}
+books |> 
+  filter(Books != "The Hobbit")
+```
+
+```{r}
+books |> 
+  filter(str_detect(Books, "ing"))
+```
+
+```{r}
+books |>
+  filter(str_detect(Books, "ing"), Words > 150000)
+```
+
+# Joining Data
+
+Merging or joining lets us combine datasets.
+
+```{r}
+dates <- tibble(
+  Books = books$Books,
+  Year = c(1977, 1934, 1954, 1954, 1954)
+)
+
+dates
+```
+
+```{r}
+merged <- books |>
+  left_join(dates, by = "Books")
+
+merged
+```
+
+# Plotting
+
+R's `ggplot2` package is part of the tidyverse and is one of the most widely used visualization tools in data science.
+
+```{r}
+ggplot(books, aes(x = Books, y = Words)) +
+  geom_col() +
+  labs(
+    title = "Word Counts for Tolkien Books",
+    x = "Book",
+    y = "Words"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## You Try
+
+Try changing the plot to use `coord_flip()`.
+
+```{r}
+# Your code here
+```
+
+# Final Mini Challenge
+
+Using the Tolkien data frames from this notebook:
+
+1.  Find the longest book
+2.  Create a plot of word counts
+3.  Filter books with more than 150,000 words
+4.  Find the average chapter length for each collection
+
+# AI Assistant Checkpoint
+
+Try asking an AI assistant:
+
+-   "Explain what this dplyr pipeline is doing."
+-   "Why does group_by need summarise?"
+-   "How would I make this plot easier to read?"
+-   "What is the difference between a vector and a data frame in R?"
+
+# Wrapping Up
+
+We covered:
+
+-   R Markdown basics
+-   variables
+-   vectors
+-   data frames
+-   filtering
+-   grouping
+-   joining
+-   plotting

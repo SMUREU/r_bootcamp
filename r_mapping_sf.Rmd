@@ -1,0 +1,412 @@
+---
+title: "Mapping with sf in R"
+author: "SMUREU Data Science Bootcamp"
+output: html_notebook
+---
+
+# Mapping with sf in R
+
+So far we have explored data using tables, filtering, sorting, and charts.
+
+But many datasets also have a geographic component.
+
+Maps can reveal patterns that are difficult to see in tables or plots.
+
+Today we will:
+
+-   load geographic data
+-   calculate spatial features like area and centroids
+-   create buffers
+-   test spatial relationships
+-   merge maps with ACS and parks data
+-   create choropleth maps
+-   interpret geographic patterns across Texas counties
+
+```{r setup}
+library(tidyverse)
+library(sf)
+```
+
+# Load Texas County Boundaries
+
+The `sf` package lets us work with spatial data in R.
+
+An `sf` object is like a data frame with a special geometry column.
+
+```{r}
+counties <- st_read("data/tx_counties.geojson", quiet = TRUE)
+
+counties |> glimpse()
+```
+
+```{r}
+counties |>
+  select(COUNTY, FIPS, SQUARE_MIL, geometry) |>
+  head()
+```
+
+# First Map
+
+```{r}
+ggplot(counties) +
+  geom_sf() +
+  labs(title = "Texas Counties")
+```
+
+# Coordinate Systems and Measurement
+
+The original county file uses latitude and longitude.
+
+That is good for locating places on Earth, but not ideal for measuring area, distance, or buffers.
+
+For measurement, we project the data into a coordinate system designed for Texas.
+
+```{r}
+counties_projected <- st_transform(counties, 3083)
+```
+
+# Area
+
+`sf` calculates area using the units of the coordinate system.
+
+After projecting to EPSG:3083, distances are measured in meters, so areas are measured in square meters.
+
+We divide by 2,589,988.11 to convert square meters into square miles.
+
+```{r}
+SQ_METERS_PER_SQ_MILE <- 2589988.11
+
+counties_projected <- counties_projected |>
+  mutate(area_sq_miles = as.numeric(st_area(geometry)) / SQ_METERS_PER_SQ_MILE)
+```
+
+```{r}
+counties_projected |>
+  st_drop_geometry() |>
+  select(COUNTY, area_sq_miles) |>
+  arrange(desc(area_sq_miles)) |>
+  head(10)
+```
+
+# Boundaries and Centroids
+
+A centroid is the geometric center of a shape.
+
+```{r}
+county_centroids <- counties_projected |>
+  mutate(geometry = st_centroid(geometry))
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = counties_projected, fill = "white", color = "black") +
+  geom_sf(data = county_centroids, color = "red", size = 0.5) +
+  labs(title = "Texas County Centroids")
+```
+
+# Distance
+
+Let's measure distance from Dallas County to every other county centroid.
+
+```{r}
+dallas_centroid <- county_centroids |>
+  filter(COUNTY == "Dallas County") |>
+  st_geometry()
+
+county_centroids <- county_centroids |>
+  mutate(distance_from_dallas_km = as.numeric(st_distance(geometry, dallas_centroid)) / 1000)
+```
+
+```{r}
+county_centroids |>
+  st_drop_geometry() |>
+  select(COUNTY, distance_from_dallas_km) |>
+  arrange(distance_from_dallas_km) |>
+  head(10)
+```
+
+# Buffers
+
+A buffer creates a zone around a geometry.
+
+Here we create a 100 km buffer around Dallas County.
+
+```{r}
+dallas_county <- counties_projected |>
+  filter(COUNTY == "Dallas County")
+
+dallas_buffer_100km <- st_buffer(dallas_county, dist = 100000)
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = counties_projected, fill = "white", color = "lightgray") +
+  geom_sf(data = dallas_county, fill = "orange", color = "black") +
+  geom_sf(data = dallas_buffer_100km, fill = NA, color = "red", linewidth = 1) +
+  labs(title = "100 km Buffer Around Dallas County")
+```
+
+# Spatial Relationships
+
+We can ask which counties intersect the 100 km buffer.
+
+```{r}
+counties_projected <- counties_projected |>
+  mutate(intersects_dallas_buffer = lengths(st_intersects(geometry, dallas_buffer_100km)) > 0)
+
+counties_projected |>
+  st_drop_geometry() |>
+  filter(intersects_dallas_buffer) |>
+  select(COUNTY) |>
+  arrange(COUNTY)
+```
+
+# Merge ACS Data
+
+Now let's bring in the ACS dataset from the previous session.
+
+```{r}
+acs <- read_csv("data/texas_ACS_2024_sample.csv", show_col_types = FALSE) |>
+  rename(
+    county = name,
+    population = `Total Population`,
+    labor_force = `Population 16 years and over in labor force`,
+    bachelors_degree = `Population 25 years and over with Bachelors Degree or higher`,
+    poverty_population = `Population 16 and over with income in the past 12 months below poverty level`,
+    internet_households = `Households with Internet Subscription`,
+    renters = `Total Population in Renter Occupied Housing`,
+    median_income = `Median Household Income in the Past 12 Months (In 2024 Inflation-adjusted Dollars)`,
+    owners = `Total Population in Owner Occupied Housing`
+  ) |>
+  mutate(
+    county_fips = str_sub(geoid, -5),
+    poverty_rate = poverty_population / labor_force,
+    bachelors_rate = bachelors_degree / population,
+    internet_rate = internet_households / (owners + renters),
+    renter_rate = renters / (owners + renters)
+  )
+```
+
+```{r}
+mapped <- counties_projected |>
+  mutate(county_fips = str_pad(as.character(FIPS), width = 5, pad = "0")) |>
+  left_join(acs, by = "county_fips")
+
+mapped |> glimpse()
+```
+
+# Choropleth Maps
+
+A choropleth map colors regions based on a data value.
+
+```{r}
+ggplot(mapped) +
+  geom_sf(aes(fill = median_income), color = NA) +
+  scale_fill_viridis_c(option = "plasma", na.value = "lightgrey") +
+  labs(
+    title = "Median Household Income by Texas County",
+    fill = "Median Income"
+  )
+```
+
+```{r}
+ggplot(mapped) +
+  geom_sf(aes(fill = poverty_rate), color = NA) +
+  scale_fill_viridis_c(na.value = "lightgrey") +
+  labs(
+    title = "Poverty Rate by Texas County",
+    fill = "Poverty Rate"
+  )
+```
+
+# Missing Data and Parks
+
+Missing data matters in maps.
+
+Now let's merge in the state parks dataset.
+
+```{r}
+parks <- read_csv("data/texas_state_parks_by_county.csv", show_col_types = FALSE)
+
+parks |> head()
+```
+
+```{r}
+mapped <- mapped |>
+  left_join(parks, by = c("geoid" = "geoid"))
+
+mapped |>
+  st_drop_geometry() |>
+  select(COUNTY, state_park_count) |>
+  head()
+```
+
+Here a missing park value will be treated as a modeling decision.
+
+We will assume missing park records mean zero state parks in that county.
+
+```{r}
+ggplot(mapped) +
+  geom_sf(aes(fill = state_park_count), color = "white") +
+  scale_fill_viridis_c(na.value = "lightgrey") +
+  labs(
+    title = "State Park Counts by County with Missing Values",
+    fill = "Parks"
+  )
+```
+
+```{r}
+mapped <- mapped |>
+  mutate(state_park_count = replace_na(state_park_count, 0))
+```
+
+```{r}
+ggplot(mapped) +
+  geom_sf(aes(fill = state_park_count), color = "white") +
+  scale_fill_viridis_c() +
+  labs(
+    title = "State Park Counts by County",
+    fill = "Parks"
+  )
+```
+
+# Capstone Example: Parks Within 100 km of a County
+
+Now let's tie several spatial ideas together.
+
+Suppose we want to ask:
+
+> How many state parks could someone plausibly drive to within 100 km of a given county?
+
+This example uses:
+
+-   projections
+-   centroids
+-   buffers
+-   spatial relationships
+-   missing data
+-   counting and summarizing
+
+## Important Limitation
+
+Our parks dataset counts parks by county, but it does not include the exact latitude and longitude of each park.
+
+So this is an approximation.
+
+We will estimate nearby parks by counting parks in counties whose centroids fall within 100 km of the selected county.
+
+A better version of this analysis would use the actual point locations of each state park.
+
+Large counties may have parks far from the county centroid.
+
+```{r}
+selected_county <- "Dallas County"
+
+target_county <- counties_projected |>
+  filter(COUNTY == selected_county)
+
+buffer_100km <- st_buffer(target_county, dist = 100000)
+```
+
+```{r}
+parks_clean <- parks |>
+  mutate(
+    county_fips = str_sub(as.character(geoid), -5)
+  ) |>
+  select(county_fips, state_park_count)
+```
+
+```{r}
+counties_with_parks <- counties_projected |>
+  mutate(county_fips = str_pad(as.character(FIPS), width = 5, pad = "0")) |>
+  left_join(
+    parks_clean,
+    by = "county_fips"
+  ) |>
+  mutate(
+    state_park_count = replace_na(state_park_count, 0),
+    centroid_geometry = st_centroid(geometry)
+  )
+```
+
+Because `sf` objects have one active geometry column, we make a separate centroid object for the within-buffer calculation.
+
+```{r}
+centroids_with_parks <- counties_with_parks |>
+  st_set_geometry("centroid_geometry")
+centroids_with_parks$within_100km <- lengths(
+  st_within(
+    st_geometry(centroids_with_parks),
+    st_geometry(buffer_100km)
+  )
+) > 0
+```
+
+```{r}
+nearby_parks <- centroids_with_parks |>
+  st_drop_geometry() |>
+  filter(within_100km) |>
+  summarise(total_parks = sum(state_park_count)) |>
+  pull(total_parks)
+nearby_parks
+```
+
+```{r}
+centroids_with_parks |>
+  st_drop_geometry() |>
+  filter(within_100km) |>
+  select(COUNTY, state_park_count) |>
+  arrange(desc(state_park_count))
+```
+
+```{r}
+nearby_counties <- counties_projected |>
+  filter(COUNTY %in% centroids_with_parks$COUNTY[centroids_with_parks$within_100km])
+
+ggplot() +
+  geom_sf(data = counties_projected, fill = "white", color = "lightgray") +
+  geom_sf(data = nearby_counties, fill = "lightblue", color = "black", alpha = 0.5) +
+  geom_sf(data = target_county, fill = "orange", color = "black") +
+  geom_sf(data = buffer_100km, fill = NA, color = "red", linewidth = 1) +
+  geom_sf(data = centroids_with_parks, aes(size = state_park_count), color = "lightgreen", alpha = 0.7) +
+  labs(
+    title = paste("Estimated state parks within 100 km of", selected_county, "County:", nearby_parks),
+    size = "Park Count"
+  )
+```
+
+## Discussion
+
+What assumptions did we make?
+
+-   We used county centroids instead of exact park locations.
+-   We counted all parks in a county if that county's centroid was within the buffer.
+-   We used a straight-line distance, not actual driving distance.
+-   We did not consider roads, traffic, park size, or park quality.
+
+This is still useful because it shows how spatial analysis can help us build an approximate answer when perfect data is not available.
+
+# Mini Challenge
+
+Create one map that surprised you.
+
+Your map should:
+
+-   use one variable from the ACS or parks dataset
+-   include a legend
+-   have a title
+
+Then write 2-3 sentences answering:
+
+1.  What pattern do you see?
+2.  Why might that pattern exist?
+3.  What is one reason this map might be misleading?
+
+# AI Assistant Checkpoint
+
+Try asking an AI assistant:
+
+-   "What does this sf map show?"
+-   "Why do I need to project geometries before measuring distance?"
+-   "What does a spatial buffer mean?"
+-   "What assumptions are built into this analysis?"
